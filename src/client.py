@@ -34,7 +34,7 @@ class MQTTClient:
         self._running = False
         self._input_str = ''
         self._past_commands = []
-        self._channels = []
+        self._topics = []
         self._commands = {
             "exit": {
                 "info": "close program",
@@ -47,30 +47,30 @@ class MQTTClient:
             "pub": {
                 "info": "publish message",
                 "func": self._cmd_pub,
-                "hint": ["channel message", "message"]
+                "hint": ["topic message", "message"]
             },
             "sub": {
-                "info": "subscribe channel",
+                "info": "subscribe topic",
                 "func": self._cmd_sub,
-                "hint": ["channel"]
+                "hint": ["topic"]
             },
             "unsub": {
-                "info": "unsubscribe channel",
+                "info": "unsubscribe topic",
                 "func": self._cmd_unsub,
-                "hint": ["channel"]
+                "hint": ["topic"]
             },
-            "channels": {
-                "info": "show subscribed channels",
-                "func": self._cmd_channels
+            "topics": {
+                "info": "show subscribed topics",
+                "func": self._cmd_topics
             }
         }
 
     def _check_chan_msg(self, arg, check_msg=False):
         if arg == None or arg == '':
             if check_msg:
-                print("missing channel and message!")
+                print("missing topic and message!")
             else:
-                print("missing channel!")
+                print("missing topic!")
             return False
         parts = arg.split(' ', 1)
         if not check_msg:
@@ -96,59 +96,47 @@ class MQTTClient:
         parts = arg.split(' ', 1)
         msg = {
             "cmd": "pub",
-            "channel": parts[0],
+            "topic": parts[0],
             "msg": parts[1]
         }
         self._sock.sendall(json.dumps(msg).encode('utf-8'))
-        #print(f'published "{parts[1]}" on {COL_GREEN}{parts[0]}{COL_NONE}')
 
     def _cmd_sub(self, arg):
         if not self._check_chan_msg(arg):
             return
-        channel = arg.split(' ', 1)[0]
-        if channel not in self._channels:
-            #self._channels.append(channel)
+        topic = arg.split(' ', 1)[0]
+        if topic not in self._topics:
             msg = {
                 "cmd": "sub",
-                "channel": channel,
+                "topic": topic,
             }
             self._sock.sendall(json.dumps(msg).encode('utf-8'))
-            #print(f"add {COL_GREEN}{channel}{COL_NONE} in subscribed channels")
         else:
-            print(f"{COL_GREEN}{channel}{COL_NONE} already in subscribed channels!")
+            print(f"{COL_GREEN}{topic}{COL_NONE} already in subscribed topics!")
 
     def _cmd_unsub(self, arg):
         if not self._check_chan_msg(arg):
             return
-        channel = arg.split(' ', 1)[0]
-        if channel in self._channels:
-            #self._channels.remove(channel)
+        topic = arg.split(' ', 1)[0]
+        if topic in self._topics:
             msg = {
                 "cmd": "unsub",
-                "channel": channel,
+                "topic": topic,
             }
             self._sock.sendall(json.dumps(msg).encode('utf-8'))
-            #print(f"removed {COL_GREEN}{channel}{COL_NONE} from subscribed channels")
         else:
-            print(f"{COL_GREEN}{channel}{COL_NONE} not in subscribed channels!")
+            print(f"{COL_GREEN}{topic}{COL_NONE} not in subscribed topics!")
 
-    def _cmd_channels(self):
-        if len(self._channels) == 0:
+    def _cmd_topics(self):
+        if len(self._topics) == 0:
             return
         print(COL_GREEN, end='')
-        for name in self._channels:
+        for name in self._topics:
             print(name)
         print(COL_NONE, end='')
 
     def _cmd_exit(self):
         os.kill(os.getpid(), signal.SIGINT)
-
-    def _erase_lines(self, length):
-        size = os.get_terminal_size()
-        count = ceil(length / size.columns)
-        #print(count)
-        for i in range(count):
-            print(ERASE_LINE, end='\r' if i == count-1 else CURSOR_UP)
 
     def _input(self, prefix):
         past_len = len(self._past_commands)
@@ -246,39 +234,39 @@ class MQTTClient:
             if status == "ok":
                 res = js['msg']
                 action = res['action']
-                channel = res['channel']
+                topic = res['topic']
                 if action == "pub":
-                    return 'published "{}" on channel {}{}{} for {} recipients'.format(
-                        res['msg'], COL_GREEN, channel, COL_NONE, res['clients'])
+                    return 'published "{}" on topic {}{}{} for {} recipients'.format(
+                        res['msg'], COL_GREEN, topic, COL_NONE, res['clients'])
                 elif action == "sub":
-                    self._channels.append(channel)
-                    return 'subscribed channel {}{}{}'.format(
-                        COL_GREEN, channel, COL_NONE)
+                    self._topics.append(topic)
+                    return 'subscribed topic {}{}{}'.format(
+                        COL_GREEN, topic, COL_NONE)
                 elif action == "unsub":
-                    self._channels.remove(channel)
-                    return 'unsubscribed channel {}{}{}'.format(
-                        COL_GREEN, channel, COL_NONE)
+                    self._topics.remove(topic)
+                    return 'unsubscribed topic {}{}{}'.format(
+                        COL_GREEN, topic, COL_NONE)
             elif status == "fail":
                 res = js['msg']
                 if type(res) is str:
                     return f'got server error: {res}'
                 action = res['action']
-                channel = res['channel']
+                topic = res['topic']
                 err = res['msg']
                 if action == "sub":
-                    self._channels.append(channel)
-                    return 'failed to subscribe channel {}{}{}: {}'.format(
-                        COL_GREEN, channel, COL_NONE, err)
+                    self._topics.append(topic)
+                    return 'failed to subscribe topic {}{}{}: {}'.format(
+                        COL_GREEN, topic, COL_NONE, err)
                 elif action == "unsub":
-                    self._channels.remove(channel)
-                    return 'failed to unsubscribed channel {}{}{}: {}'.format(
-                        COL_GREEN, channel, COL_NONE, err)
+                    self._topics.remove(topic)
+                    return 'failed to unsubscribed topic {}{}{}: {}'.format(
+                        COL_GREEN, topic, COL_NONE, err)
             elif status == "msg":
                 res = js['msg']
-                channel = res['channel']
+                topic = res['topic']
                 msg = res['msg']
                 return '{}{}{}: {}{}'.format(
-                        COL_GREEN, channel, COL_WHITE, msg, COL_NONE)
+                        COL_GREEN, topic, COL_WHITE, msg, COL_NONE)
         except:
             pass
         return f'unhandled message: {msg}'
