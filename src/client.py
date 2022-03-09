@@ -158,7 +158,8 @@ class MQTTClient:
                         cmd = cmd[:index-1] + cmd[index:]
                         index -= 1
             elif chr == CHR_TAB:
-                self._auto_complete()
+                cmd = self._auto_complete(cmd)
+                index = len(cmd)
             elif chr == CHR_UP:
                 if past_len and cmd_ptr > 0:
                     cmd_ptr -= 1
@@ -208,9 +209,26 @@ class MQTTClient:
                         return cmd + COL_BLUE + hint + COL_NONE, 11
         return cmd, 0
 
-    def _auto_complete(self):
-        # not implemented
-        return
+    def _auto_complete(self, cmd):
+        parts = cmd.split(' ', 2)
+        hint = parts[-1]
+        cands = []
+        if len(parts) == 1:
+            cands = [key for key in iter(self._commands) if key.startswith(hint)]
+        if len(parts) == 2:
+            cands = [key for key in self._topics if key.startswith(hint)]
+        if len(cands) == 1:
+            cmd = cands[0] if len(parts) == 1 else parts[0] + ' ' + cands[0]
+        elif len(cands) > 1:
+            key = cands[0]
+            index = len(hint)
+            cmd = hint if len(parts) == 1 else parts[0] + ' ' + hint
+            for i,c in enumerate(key[index:]):
+                for cand in cands:
+                    if len(cand)-1 < index+i or cand[index+i] is not c:
+                        return cmd
+                cmd += str(c)
+        return cmd
 
     def _check_cmd(self, cmd):
         parts = cmd.split(' ', 1)
